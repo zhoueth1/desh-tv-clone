@@ -35,3 +35,6 @@ yarn-error.log*
 /generated/
 /tmp/
 *.tsbuildinfo
+
+# Netlify local deployment state
+/.netlify/

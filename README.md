@@ -39,6 +39,14 @@ npm start
 
 Client generation runs on install and before development/type checking. The pinned Prisma, esbuild, and protobuf installation scripts are explicitly approved in `package.json` for npm 12.
 
+## Deploy on Netlify
+
+The production site is https://deshtv.netlify.app, connected to the `main` branch of `zhoueth1/desh-tv-clone`. Pushes to `main` build and deploy automatically. `netlify.toml` pins the build tools, runs `npm run build`, publishes `.next`, and includes the database CA certificate. Netlify automatically supplies its Next.js adapter for server rendering and API routes.
+
+Set `DATABASE_URL` and `NEXTAUTH_SECRET` in Netlify's environment settings with **Contains secret values** enabled. Set `NEXTAUTH_URL`, `NEXT_PUBLIC_HOST_URL`, and `BASE_URL` to `https://deshtv.netlify.app` with that setting disabled: these are public origins. Public Supabase URLs and publishable/anon keys must also use the public setting. Keep `NETLIFY_TOKEN` local; the application does not need it. Set `AWS_LAMBDA_JS_RUNTIME=nodejs24.x` through Netlify's environment settings for the server runtime.
+
+On Netlify, image uploads use the writable temporary directory during ingestion and persist their bytes in the existing `Article.image_data` column. Image routes fall back to that database copy across cold starts and redeploys. The database schema needs no additional migration for deployment.
+
 ## Verify
 
 ```powershell

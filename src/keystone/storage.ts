@@ -1,8 +1,13 @@
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { tmpdir } from 'node:os';
 import type { BaseKeystoneTypeInfo, StorageStrategy } from '@keystone-6/core/types';
 
-const imageDirectory = path.resolve(process.cwd(), 'public/images');
+// Netlify functions have a read-only bundle. Uploaded bytes are also saved in
+// Article.image_data, so temporary files are needed only while ingesting uploads.
+const imageDirectory = process.env.NETLIFY
+  ? path.join(tmpdir(), 'desh-tv-images')
+  : path.resolve(process.cwd(), 'public/images');
 
 function imagePath(key: string) {
   if (!/^[A-Za-z0-9_-]+\.[A-Za-z0-9]+$/.test(key)) {
@@ -36,13 +41,29 @@ export async function resolveImageData({ resolvedData, inputData, item }: any) {
   }
   const uploaded = resolvedData.image;
   if (!uploaded?.id || !uploaded?.extension) return null;
-  const bytes = await readFile(imagePath(`${uploaded.id}.${uploaded.extension}`));
+  const bytes = await readFile(/* turbopackIgnore: true */ imagePath(`${uploaded.id}.${uploaded.extension}`));
   const mime = uploaded.extension === 'jpg' ? 'jpeg' : uploaded.extension;
   return `data:image/${mime};base64,${bytes.toString('base64')}`;
 }
 
 export async function storedImage(key: string) {
-  const bytes = await readFile(imagePath(key));
+  const filePath = imagePath(key);
+  let bytes: Buffer;
+  try {
+    bytes = await readFile(/* turbopackIgnore: true */ filePath);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    // Serve the persisted copy across cold starts and redeploys.
+    const { prisma } = await import('./context');
+    const separator = key.lastIndexOf('.');
+    const article = await prisma.article.findFirst({
+      where: { image_id: key.slice(0, separator), image_extension: key.slice(separator + 1) },
+      select: { image_data: true },
+    });
+    const image = article?.image_data?.match(/^data:image\/[a-zA-Z0-9.+-]+;base64,([A-Za-z0-9+/=]+)$/);
+    if (!image) throw error;
+    bytes = Buffer.from(image[1], 'base64');
+  }
   const extension = path.extname(key).slice(1).toLowerCase();
   const contentTypes = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp' };
   return { bytes, contentType: contentTypes[extension] || 'application/octet-stream' };

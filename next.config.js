@@ -1,4 +1,7 @@
 module.exports = {
+  outputFileTracingIncludes: {
+    '/*': ['./certs/**'],
+  },
   compiler: {
     styledComponents: {
       ssr: true,

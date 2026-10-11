@@ -1,0 +1,10 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "26.11.1"
+  NPM_VERSION = "12.2.0"
+
+[functions]
+  included_files = ["certs/**"]
