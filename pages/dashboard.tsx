@@ -1,15 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import styled from 'styled-components';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import DashboardNav from '../src/components/DashboardNav';
-import _ from 'lodash';
-import { createAllArticles } from '../src/utils/createAllArticles';
 import transferCategories from '../src/utils/transferCategories';
-import ProgressBar from '../src/components/ProgressBar';
 import transferRecommendedArticles from '../src/utils/transferRecommendedArticles';
-import useCreateArticles from '../src/hooks/useCreateArticles';
-import CreateArticlesSummary from '../src/components/CreateArticlesSummary';
 import FetchForm from '../src/components/FetchForm';
 import useTestApi from '../src/hooks/useTestApi';
 
@@ -25,37 +20,31 @@ const dashboard = () => {
   const { data: session, status } = useSession();
 
   useEffect(() => {
-    if (router && status !== 'authenticated') {
+    if (status === 'unauthenticated') {
       router.push('/coolkidsonly');
     }
   }, [router, status]);
 
-  const handleTransferCategories = (e) => {
-    e.preventDefault();
-    transferCategories();
+  const handleOperation = async (event, operation) => {
+    event.preventDefault();
+    try {
+      await operation();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Unable to complete this request.');
+    }
   };
 
-  const handleTransferRecommendedArticles = (e) => {
-    e.preventDefault();
-    transferRecommendedArticles();
-  };
-
-  const handleTestApi = (e) => {
-    e.preventDefault();
-    useTestApi();
-  };
-
-  if (status === 'authenticated' && session.user) {
+  if (status === 'authenticated' && session?.user) {
     return (
       <DashbaordPageWrapper>
-        <DashboardNav annotations={`Hello, ${session.user.email}`} />
+        <DashboardNav annotations={`Hello, ${session.user.email || session.user.name}`} />
         <FetchForm creationObject="polls" />
         <FetchForm creationObject="articles" />
-        <button onClick={handleTransferCategories}>transfer categories</button>
-        <button onClick={handleTransferRecommendedArticles}>
+        <button onClick={(event) => handleOperation(event, transferCategories)}>transfer categories</button>
+        <button onClick={(event) => handleOperation(event, transferRecommendedArticles)}>
           transfer recommended articles
         </button>
-        <button onClick={handleTestApi}>Test api</button>
+        <button onClick={(event) => handleOperation(event, useTestApi)}>Test api</button>
       </DashbaordPageWrapper>
     );
   }

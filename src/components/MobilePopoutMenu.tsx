@@ -1,14 +1,13 @@
 import React from 'react';
 import styled from 'styled-components';
 import { ImCross } from 'react-icons/im';
-import { faker } from '@faker-js/faker';
 import Link from 'next/link';
 import { categoryList } from '../constants';
 import _ from 'lodash';
 
-const PopoutWrapper = styled.nav<{ openPopout: boolean }>`
+const PopoutWrapper = styled.nav<{ $openPopout: boolean }>`
   position: fixed;
-  transform: ${(p) => (p.openPopout ? 'translateX(0)' : 'translateX(-1000px)')};
+  transform: ${(p) => (p.$openPopout ? 'translateX(0)' : 'translateX(-1000px)')};
   display: flex;
   left: 0px;
   top: 0px;
@@ -40,7 +39,7 @@ const CloseButton = styled.button`
   height: 32px;
   cursor: pointer;
   padding: 0;
-  :hover {
+  &:hover {
     color: rgb(0, 140, 117);
   }
 `;
@@ -64,7 +63,7 @@ const CategoryButtons = styled.button`
   background-color: #dcdcdc;
   transition: 0.3s ease-out;
   cursor: pointer;
-  :hover {
+  &:hover {
     color: rgb(0, 140, 117);
   }
 `;
@@ -76,9 +75,9 @@ const Logo = styled.img`
 
 const MobilePopoutMenu = ({ openPopout, changeOpenPopout }) => {
   return (
-    <PopoutWrapper openPopout={openPopout}>
+    <PopoutWrapper $openPopout={openPopout}>
       <FirstRowWrapper>
-        <Link href="/">
+        <Link onClick={() => changeOpenPopout(false)} style={{ display: 'contents', color: 'inherit', textDecoration: 'none' }} href="/">
           <Logo src="/logo.svg" />
         </Link>
         <CloseButton
@@ -91,7 +90,7 @@ const MobilePopoutMenu = ({ openPopout, changeOpenPopout }) => {
       </FirstRowWrapper>
       <Divider />
       {categoryList.map((category) => (
-        <Link href={`/category/${category}`} key={category}>
+        <Link onClick={() => changeOpenPopout(false)} style={{ display: 'contents', color: 'inherit', textDecoration: 'none' }} href={`/category/${category}`} key={category}>
           <CategoryButtons>{_.upperCase(category)}</CategoryButtons>
         </Link>
       ))}

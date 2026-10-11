@@ -1,124 +1,60 @@
-import * as cheerio from 'cheerio';
-import axios from 'axios';
-import { fetchArticle } from './utils/fetchArticle';
-import _, { attempt } from 'lodash';
-import { createArticle } from './utils/createArticle';
-import createError from './utils/createError';
-import { ErrorStage, ErrorType } from './enums';
-import { PrismaClient } from '@prisma/client';
+﻿import type { NextApiRequest, NextApiResponse } from 'next';
+import { fetchArticle } from '../../src/server/scraper/fetchArticle';
+import { createArticle } from '../../src/server/database/createArticle';
+import { createRecommendedArticles } from '../../src/server/database/createRecommendedArticles';
+import { prisma } from '../../src/keystone/context';
+import { parseArticleLinks } from '../../src/server/scraper/parse';
+import { mapWithConcurrency, resolveDeshUrl, scrapeRequest } from '../../src/server/scraper/request';
+import { createStatuses, ErrorStage, ErrorType } from '../../src/server/scraper/types';
+import createError from '../../src/server/scraper/createError';
 
-// const mysql = require('mysql2/promise');
-require('dotenv').config();
-
-export default async function handler(req, res) {
-  let data;
-  const prisma = new PrismaClient();
-  const statuses = {
-    completed: 0,
-    attempts: 0,
-    fetchingErrors: 0,
-    creationErrors: 0,
-    errors: {
-      // Reason: count
-    },
-  };
-  try {
-    // connection = await mysql.createConnection(process.env.DATABASE_URL);
-    await prisma.$connect();
-    ({ data } = await axios.get(req.body.pageUrl, {
-      headers: { 'Access-Control-Allow-Origin': '*' },
-      baseURL: process.env.NEXT_PUBLIC_HOST_URL,
-    }));
-  } catch (err) {
-    console.log(
-      'CANNOT GAIN CONNECTION TO BACKEND / CANNOT REACH DESH.TV',
-      err
-    );
-    return res.status(400);
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    return res.status(405).json({ error: 'Use POST to scrape articles.' });
   }
-  // console.log('page data', data);
+  const statuses = createStatuses();
   try {
-    const dom = cheerio.load(data);
-    const articleAnchors = dom('a');
-    // console.log('Article Anchors', articleAnchors);
-
-    const articleLinks = articleAnchors.map((i, anchor) =>
-      encodeURI(anchor.attribs.href)
-    );
-    // console.log('article links', articleLinks);
-    const articleDataPromises = [];
-    articleLinks.each((i, link) => {
-      const articleDataPromise = new Promise((resolve, reject) => {
-        fetchArticle(link, statuses)
-          .then((articleData) => {
-            console.log('Data gathering status', articleData.status);
-            resolve(articleData);
-          })
-          .catch((error) => {
-            createError(
-              statuses,
-              ErrorType.FetchPromiseRejected,
-              link,
-              ErrorStage.Fetching
-            );
-            reject(error);
-          });
-      });
-
-      articleDataPromises.push(articleDataPromise);
-    });
-
-    const allArticleData = await Promise.all(articleDataPromises);
-
-    const createArticlePromises = [];
-
-    allArticleData.forEach((article) => {
+    const pageUrl = resolveDeshUrl(req.body?.pageUrl);
+    const { data } = await scrapeRequest.get<string>(pageUrl);
+    const articleLinks = parseArticleLinks(data, pageUrl);
+    const recommendations: { slug: string; links: string[]; articleUrl: string }[] = [];
+    await mapWithConcurrency(articleLinks, 2, async (link) => {
       statuses.attempts++;
-      const createArticlePromise = new Promise((resolve, reject) => {
-        createArticle(
-          article.articleSlug,
-          article.articleImageData,
-          article.translatedTitle,
-          article.categoryName,
-          article.translatedDate,
-          article.translatedParagraphs,
-          article.recommendedArticleSlugs,
-          false,
-          prisma,
-          article.articleUrl,
-          statuses
-        )
-          .then((createArticleStatus) => {
-            resolve(createArticleStatus);
-          })
-          .catch((error) => {
-            console.log(
-              'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
-              error
-            );
-            createError(
-              statuses,
-              ErrorType.CreatePromiseRejected,
-              article.articleUrl,
-              ErrorStage.Creation
-            );
-            reject();
-          });
+      const article = await fetchArticle(link, statuses);
+      if (article.status !== 200 || !('articleSlug' in article)) return;
+      await createArticle(
+        article.articleSlug,
+        article.articleImageData,
+        article.translatedTitle,
+        article.categoryName,
+        article.translatedDate,
+        article.translatedParagraphs,
+        article.recommendedArticleSlugs,
+        false,
+        prisma,
+        article.articleUrl,
+        statuses
+      );
+      recommendations.push({
+        slug: article.articleSlug,
+        links: article.recommendedArticleSlugs,
+        articleUrl: article.articleUrl,
       });
-      createArticlePromises.push(createArticlePromise);
     });
-
-    const createArticleStatuses = await Promise.all(createArticlePromises);
-
-    // connection.end();
-    await prisma.$disconnect();
-
-    // console.log('CREATE ARTICLE STATUS', createArticleStatuses);
-    res.status(200).json({ statuses });
-  } catch (error) {
-    console.log('WE FOUND WHERE THE ERROR MIGHT BE', error);
-    // connection.end();
-    await prisma.$disconnect();
-    res.status(400);
+    // Targets can appear later in the same listing, so connect after its inserts finish.
+    // This also restores links on previously scraped articles when a batch is retried.
+    await mapWithConcurrency(recommendations, 2, async ({ slug, links, articleUrl }) => {
+      if (!links.length) return;
+      try {
+        const article = await prisma.article.findUnique({ where: { slug }, select: { id: true } });
+        if (article) await createRecommendedArticles(links, article.id, prisma);
+      } catch {
+        createError(statuses, ErrorType.GeneralCantCreate, articleUrl, ErrorStage.Creation);
+      }
+    });
+    return res.status(200).json({ statuses });
+  } catch {
+    return res.status(400).json({ error: 'The Desh TV article listing could not be fetched.', statuses });
   }
 }

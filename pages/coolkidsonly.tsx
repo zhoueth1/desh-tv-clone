@@ -75,15 +75,14 @@ const coolKidsOnly = () => {
       password,
       redirect: false,
     });
-    if (result.error) {
-      alert(result.error);
+    if (!result || result.error) {
+      alert(result?.error || 'Unable to sign in. Please try again.');
     } else {
       router.push('/dashboard');
     }
   };
 
   React.useEffect(() => {
-    console.log(status);
     if (router && status === 'authenticated') {
       router.push('/dashboard');
     }

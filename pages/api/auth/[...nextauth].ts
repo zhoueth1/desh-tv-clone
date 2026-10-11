@@ -1,8 +1,8 @@
-import NextAuth from 'next-auth';
+import NextAuth, { type NextAuthOptions } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 
-const options = {
-  secret: process.env.NEXT_AUTH_SECRET,
+const options: NextAuthOptions = {
+  secret: process.env.NEXTAUTH_SECRET || process.env.NEXT_AUTH_SECRET,
   providers: [
     Credentials({
       name: 'HTTP',
@@ -13,18 +13,18 @@ const options = {
       async authorize(credentials) {
         // You can replace this with your own authentication logic
         if (
-          credentials.username === 'admin' &&
-          credentials.password === 'password'
+          credentials?.username === (process.env.ADMIN_USERNAME || 'admin') &&
+          credentials?.password === (process.env.ADMIN_PASSWORD || 'password')
         ) {
-          return Promise.resolve({ id: 1, username: 'admin' });
+          return { id: '1', name: credentials.username };
         } else {
-          return Promise.resolve(null);
+          return null;
         }
       },
     }),
   ],
   pages: {
-    signIn: '/coolKidsOnly',
+    signIn: '/coolkidsonly',
   },
   callbacks: {
     async jwt({ token, account }) {
@@ -34,12 +34,12 @@ const options = {
       }
       return token;
     },
-    async session({ session, token, user }) {
+    async session({ session, token }) {
       // Send properties to the client, like an access_token from a provider.
-      session.accessToken = token.accessToken;
+      (session as typeof session & { accessToken?: unknown }).accessToken = token.accessToken;
       return session;
     },
   },
 };
 
-export default (req, res) => NextAuth(req, res, options);
+export default NextAuth(options);

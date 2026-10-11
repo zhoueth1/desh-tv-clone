@@ -55,7 +55,7 @@ const MobileRecommendedArticles = ({ data }: { data: Articles }) => {
   return (
     <React.Fragment>
       {data.map((article) => (
-        <Link href={`/article${article.slug}`} key={article.title}>
+        <Link style={{ display: 'contents', color: 'inherit', textDecoration: 'none' }} href={article.slug} key={article.slug}>
           <RecommendedArticle>
             <ImageFilter>
               <RecommendedArticleImageWrapper>

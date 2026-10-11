@@ -1,15 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import styled, { keyframes } from 'styled-components';
 import MobileNav from '../../src/components/MobileNav';
 import Navbar from '../../src/components/Navbar';
 import useMediaQuery from '../../src/hooks/useMediaQuery';
-import { unescape } from 'lodash';
 import moment from 'moment';
-import { gql } from '@apollo/client';
-import {
-  DocumentRenderer,
-  DocumentRendererProps,
-} from '@keystone-6/document-renderer';
+import { gql } from 'graphql-request';
+import { DocumentRenderer } from '@keystone-6/document-renderer';
 import RecommendedArticles from '../../src/components/RecommendedArticles';
 import { client } from '../../src/utils/graphqlRequest';
 import MobileRecommendedArticles from '../../src/components/MobileRecommendedArticles';
@@ -26,11 +22,11 @@ const fadeOut = keyframes`
   100% {opacity: 0}
 `;
 
-const PageWrapper = styled.div<{ leavingScreen: boolean }>`
+const PageWrapper = styled.div<{ $leavingScreen: boolean }>`
   font-family: Teko;
   display: flex;
   flex-direction: column;
-  animation-name: ${({ leavingScreen }) => (leavingScreen ? fadeOut : fadeIn)};
+  animation-name: ${({ $leavingScreen }) => ($leavingScreen ? fadeOut : fadeIn)};
   animation-duration: 0.5s;
 `;
 
@@ -137,41 +133,42 @@ const ArticlePage = ({
 }) => {
   const isMobile = useMediaQuery('(max-width: 768px)');
   const isRecommendedOnBottom = useMediaQuery('(max-width: 1200px)');
-  const [modifiedDocument, setModifiedDocument] = useState([]);
+
   const [leavingScreen, setLeavingScreen] = useState(false);
   const [pageData, setPageData] = useState(data);
 
   useEffect(() => {
     setLeavingScreen(true);
-    setTimeout(() => {
+    const timeout = setTimeout(() => {
       setPageData(data);
       setLeavingScreen(false);
     }, 500);
+    return () => clearTimeout(timeout);
   }, [slug, data]);
 
-  useEffect(() => {
-    if (data.article.content.document) {
-      const parsedDocument = JSON.parse(pageData.article.content.document);
-      setModifiedDocument(() => {
-        const temp = Object.keys(parsedDocument).map((key) => {
-          return {
-            type: parsedDocument[key].type,
-            children: parsedDocument[key].children.map((child) => {
-              console.log(child);
-              child.text = _.unescape(child.text);
-              child.key = key;
-              return child;
-            }),
-          };
-        });
-
-        return temp;
-      });
+  const modifiedDocument = useMemo(() => {
+    const document = pageData.article?.content?.document;
+    if (!document) return [];
+    try {
+      const parsed = typeof document === 'string' ? JSON.parse(document) : document;
+      const unescapeNode = (node) => {
+        if (!node || typeof node !== 'object') return node;
+        return {
+          ...node,
+          ...(typeof node.text === 'string' ? { text: _.unescape(node.text) } : {}),
+          ...(Array.isArray(node.children)
+            ? { children: node.children.map(unescapeNode) }
+            : {}),
+        };
+      };
+      return (Array.isArray(parsed) ? parsed : Object.values(parsed)).map(unescapeNode);
+    } catch (error) {
+      console.error('Unable to read article content', error);
+      return [];
     }
-  }, [data.article]);
-
+  }, [pageData.article]);
   return (
-    <PageWrapper key={slug} leavingScreen={leavingScreen}>
+    <PageWrapper key={slug} $leavingScreen={leavingScreen}>
       {isMobile ? <MobileNav /> : <Navbar />}
       <ContentWrapper>
         <ArticleWrapper>
@@ -183,7 +180,7 @@ const ArticlePage = ({
           <DateWrapper>
             <Date>
               {data.article &&
-                moment(pageData.article.translated_date).format(
+                moment(pageData.article.translated_date).locale('en').format(
                   'dddd, MMMM Do YYYY'
                 )}
             </Date>
@@ -215,7 +212,7 @@ const ArticlePage = ({
 };
 
 export async function getServerSideProps(context) {
-  const data = await client.request(
+  const data = await client.request<{ article: ArticleData | null; articles: Articles }>(
     gql`
       query Query(
         $where: ArticleWhereUniqueInput!
@@ -249,12 +246,12 @@ export async function getServerSideProps(context) {
     `,
     {
       where: {
-        slug: context.resolvedUrl,
+        slug: context.resolvedUrl.split('?')[0],
       },
       articlesWhere2: {
         slug: {
           not: {
-            equals: context.resolvedUrl,
+            equals: context.resolvedUrl.split('?')[0],
           },
         },
       },
@@ -262,7 +259,8 @@ export async function getServerSideProps(context) {
     }
   );
 
-  return { props: { data, slug: context.query.slug } };
+  if (!data.article) return { notFound: true };
+  return { props: { data, slug: context.params.slug.join('/') } };
 }
 
 export default ArticlePage;

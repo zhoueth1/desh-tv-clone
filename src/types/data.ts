@@ -1,11 +1,13 @@
+import type { DocumentRendererProps } from '@keystone-6/document-renderer';
+
 export type ArticleData = {
-  id?: number;
+  id?: string;
   slug: string;
   image_data: string;
   title: string;
   translated_date?: string;
   created_at?: Date;
-  content?: { document: Document };
+  content?: { document: DocumentRendererProps['document'] | string };
   category?: {
     name: string;
     slug: string;
@@ -15,7 +17,7 @@ export type ArticleData = {
 export type Articles = Array<ArticleData>;
 
 export type PollData = {
-  id?: number;
+  id?: string;
   slug: string;
   image_data: string;
   title: string;

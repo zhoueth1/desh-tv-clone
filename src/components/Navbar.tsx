@@ -41,7 +41,7 @@ const NavButtons = styled.button`
   background-color: #dcdcdc;
   transition: 0.3s ease-out;
   cursor: pointer;
-  :hover {
+  &:hover {
     color: rgb(0, 140, 117);
   }
   height: 100%;
@@ -68,7 +68,7 @@ const LeftRightButtons = styled.button`
   transition: 0.3s ease-out;
   cursor: pointer;
   z-index: 1;
-  :hover {
+  &:hover {
     background-color: #b0b0b0;
   }
   display: block;
@@ -78,28 +78,28 @@ const LeftRightButtons = styled.button`
 `;
 
 const GroupWrapper = styled.div<{
-  showGroup: boolean;
-  prevListNumber: number;
-  listNumber: number;
-  hasNotScrolled: boolean;
-  groupNumber: number;
+  $showGroup: boolean;
+  $prevListNumber: number;
+  $listNumber: number;
+  $hasNotScrolled: boolean;
+  $groupNumber: number;
 }>`
   ${(p) => {
-    if (p.showGroup) {
+    if (p.$showGroup) {
       return 'justify-self: center; z-index: 0; display: block;';
     } else {
-      if (p.prevListNumber < p.listNumber) {
-        if (p.groupNumber > p.listNumber) {
+      if (p.$prevListNumber < p.$listNumber) {
+        if (p.$groupNumber > p.$listNumber) {
           return 'transform: translateX(2000px); content-visibility:hidden;';
         }
         return 'transform: translateX(-2000px); content-visibility:hidden;';
-      } else if (p.prevListNumber > p.listNumber) {
-        if (p.groupNumber < p.listNumber) {
+      } else if (p.$prevListNumber > p.$listNumber) {
+        if (p.$groupNumber < p.$listNumber) {
           return 'transform: translateX(-2000px); content-visibility:hidden;';
         }
         return 'transform: translateX(2000px); content-visibility:hidden;';
-      } else if (p.prevListNumber == p.listNumber) {
-        if (p.listNumber == 2) {
+      } else if (p.$prevListNumber == p.$listNumber) {
+        if (p.$listNumber == 2) {
           return 'transform: translateX(-2000px); content-visibility:hidden;';
         } else {
           return 'transform: translateX(2000px); content-visibility:hidden;';
@@ -125,33 +125,22 @@ const Logo = styled.img`
   height: 100%;
 `;
 
-const handleLeftArrow = (setListNumber, setPrevListNumber) => {
-  setListNumber((prevListNumber) => {
-    setPrevListNumber(() => prevListNumber);
-    if (prevListNumber - 1 != 0) {
-      return Math.max(prevListNumber - 1, 0);
-    } else {
-      return 0;
-    }
-  });
+const handleLeftArrow = (listNumber, setListNumber, setPrevListNumber) => {
+  setPrevListNumber(listNumber);
+  setListNumber(Math.max(listNumber - 1, 0));
 };
 
 const handleRightArrow = (
+  listNumber,
+  lastListNumber,
   setListNumber,
   setPrevListNumber,
   setHasNotScrolled
 ) => {
-  setListNumber((prevListNumber) => {
-    setPrevListNumber(() => prevListNumber);
-    if (prevListNumber + 1 != 2) {
-      return Math.min(prevListNumber + 1, 2);
-    } else {
-      return 2;
-    }
-  });
-  setHasNotScrolled(() => false);
+  setPrevListNumber(listNumber);
+  setListNumber(Math.min(listNumber + 1, lastListNumber));
+  setHasNotScrolled(false);
 };
-
 const handleLeftButtonStyle = (listNumber): CSSProperties => {
   if (listNumber == 0) {
     return { visibility: 'hidden' };
@@ -159,8 +148,8 @@ const handleLeftButtonStyle = (listNumber): CSSProperties => {
   return;
 };
 
-const handleRightButtonStyle = (listNumber): CSSProperties => {
-  if (listNumber == 2) {
+const handleRightButtonStyle = (listNumber, lastListNumber): CSSProperties => {
+  if (listNumber == lastListNumber) {
     return { visibility: 'hidden' };
   }
   return;
@@ -183,13 +172,13 @@ const Navbar = () => {
   return (
     <NavWrapper>
       <NavTopContentWrapper>
-        <Link href="/">
+        <Link style={{ display: 'contents', color: 'inherit', textDecoration: 'none' }} href="/">
           <Logo src="/logo.svg" />
         </Link>
       </NavTopContentWrapper>
       <NavContentWrapper>
         <LeftRightButtons
-          onClick={() => handleLeftArrow(setListNumber, setPrevListNumber)}
+          onClick={() => handleLeftArrow(listNumber, setListNumber, setPrevListNumber)}
           style={handleLeftButtonStyle(listNumber)}
         >
           <AiFillCaretLeft />
@@ -198,15 +187,15 @@ const Navbar = () => {
           {categoryLists.map((categoryList, categoryListNumber) => {
             return (
               <GroupWrapper
-                showGroup={categoryListNumber == listNumber ? true : false}
-                prevListNumber={prevListNumber}
-                listNumber={listNumber}
-                hasNotScrolled={hasNotScrolled}
-                groupNumber={categoryListNumber}
+                $showGroup={categoryListNumber == listNumber ? true : false}
+                $prevListNumber={prevListNumber}
+                $listNumber={listNumber}
+                $hasNotScrolled={hasNotScrolled}
+                $groupNumber={categoryListNumber}
                 key={categoryList.join()}
               >
                 {categoryList.map((category) => (
-                  <Link href={`/category/${category}`} key={category}>
+                  <Link style={{ display: 'contents', color: 'inherit', textDecoration: 'none' }} href={`/category/${category}`} key={category}>
                     <NavButtons>{_.upperCase(category)}</NavButtons>
                   </Link>
                 ))}
@@ -217,12 +206,14 @@ const Navbar = () => {
         <LeftRightButtons
           onClick={() =>
             handleRightArrow(
+              listNumber,
+              categoryLists.length - 1,
               setListNumber,
               setPrevListNumber,
               setHasNotScrolled
             )
           }
-          style={handleRightButtonStyle(listNumber)}
+          style={handleRightButtonStyle(listNumber, categoryLists.length - 1)}
         >
           <AiFillCaretRight />
         </LeftRightButtons>

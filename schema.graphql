@@ -133,11 +133,11 @@ type Article {
 
 type ImageFieldOutput {
   id: ID!
+  url: String!
+  extension: ImageExtension!
   filesize: Int!
   width: Int!
   height: Int!
-  extension: ImageExtension!
-  url: String!
 }
 
 enum ImageExtension {
@@ -269,6 +269,7 @@ input CategoryRelateToOneForCreateInput {
 input ArticleRelateToManyForCreateInput {
   create: [ArticleCreateInput!]
   connect: [ArticleWhereUniqueInput!]
+  set: [ArticleWhereUniqueInput!]
 }
 
 type Category {
@@ -458,20 +459,21 @@ type Mutation {
   updatePolls(data: [PollUpdateArgs!]!): [Poll]
   deletePoll(where: PollWhereUniqueInput!): Poll
   deletePolls(where: [PollWhereUniqueInput!]!): [Poll]
+  votePoll(slug: String!, option: String!): Poll
 }
 
 type Query {
-  users(where: UserWhereInput! = {}, orderBy: [UserOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: UserWhereUniqueInput): [User!]
   user(where: UserWhereUniqueInput!): User
+  users(where: UserWhereInput! = {}, orderBy: [UserOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: UserWhereUniqueInput): [User!]
   usersCount(where: UserWhereInput! = {}): Int
-  articles(where: ArticleWhereInput! = {}, orderBy: [ArticleOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: ArticleWhereUniqueInput): [Article!]
   article(where: ArticleWhereUniqueInput!): Article
+  articles(where: ArticleWhereInput! = {}, orderBy: [ArticleOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: ArticleWhereUniqueInput): [Article!]
   articlesCount(where: ArticleWhereInput! = {}): Int
-  categories(where: CategoryWhereInput! = {}, orderBy: [CategoryOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: CategoryWhereUniqueInput): [Category!]
   category(where: CategoryWhereUniqueInput!): Category
+  categories(where: CategoryWhereInput! = {}, orderBy: [CategoryOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: CategoryWhereUniqueInput): [Category!]
   categoriesCount(where: CategoryWhereInput! = {}): Int
-  polls(where: PollWhereInput! = {}, orderBy: [PollOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: PollWhereUniqueInput): [Poll!]
   poll(where: PollWhereUniqueInput!): Poll
+  polls(where: PollWhereInput! = {}, orderBy: [PollOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: PollWhereUniqueInput): [Poll!]
   pollsCount(where: PollWhereInput! = {}): Int
   keystone: KeystoneMeta!
 }
@@ -482,32 +484,34 @@ type KeystoneMeta {
 
 type KeystoneAdminMeta {
   lists: [KeystoneAdminUIListMeta!]!
-  list(key: String!): KeystoneAdminUIListMeta
+  list(key: String!, itemId: ID): KeystoneAdminUIListMeta
 }
 
 type KeystoneAdminUIListMeta {
   key: String!
-  itemQueryName: String!
-  listQueryName: String!
-  hideCreate: Boolean!
-  hideDelete: Boolean!
-  path: String!
   label: String!
   singular: String!
   plural: String!
-  description: String
-  initialColumns: [String!]!
-  pageSize: Int!
+  path: String!
   labelField: String!
   fields: [KeystoneAdminUIFieldMeta!]!
   groups: [KeystoneAdminUIFieldGroupMeta!]!
+  actions: [KeystoneAdminUIActionMeta!]!
+  graphql: KeystoneAdminUIGraphQL!
+  pageSize: Int!
+  initialColumns: [String!]!
+  initialSearchFields: [String!]!
   initialSort: KeystoneAdminUISort
-  isHidden: Boolean!
+  initialFilter: JSON
+  hiddenFilter: JSON
   isSingleton: Boolean!
+  hideNavigation: Boolean!
+  hideCreate: Boolean!
+  hideDelete: Boolean!
 }
 
 type KeystoneAdminUIFieldMeta {
-  path: String!
+  key: String!
   label: String!
   description: String
   isOrderable: Boolean!
@@ -517,8 +521,8 @@ type KeystoneAdminUIFieldMeta {
   viewsIndex: Int!
   customViewsIndex: Int
   createView: KeystoneAdminUIFieldMetaCreateView!
+  itemView: KeystoneAdminUIFieldMetaItemView
   listView: KeystoneAdminUIFieldMetaListView!
-  itemView(id: ID): KeystoneAdminUIFieldMetaItemView
   search: QueryMode
 }
 
@@ -529,12 +533,19 @@ enum KeystoneAdminUIFieldMetaIsNonNull {
 }
 
 type KeystoneAdminUIFieldMetaCreateView {
-  fieldMode: KeystoneAdminUIFieldMetaCreateViewFieldMode!
+  fieldMode: JSON!
+  isRequired: JSON!
 }
 
-enum KeystoneAdminUIFieldMetaCreateViewFieldMode {
-  edit
-  hidden
+type KeystoneAdminUIFieldMetaItemView {
+  fieldMode: JSON!
+  fieldPosition: KeystoneAdminUIFieldMetaItemViewFieldPosition!
+  isRequired: JSON!
+}
+
+enum KeystoneAdminUIFieldMetaItemViewFieldPosition {
+  form
+  sidebar
 }
 
 type KeystoneAdminUIFieldMetaListView {
@@ -546,26 +557,93 @@ enum KeystoneAdminUIFieldMetaListViewFieldMode {
   hidden
 }
 
-type KeystoneAdminUIFieldMetaItemView {
-  fieldMode: KeystoneAdminUIFieldMetaItemViewFieldMode
-  fieldPosition: KeystoneAdminUIFieldMetaItemViewFieldPosition
-}
-
-enum KeystoneAdminUIFieldMetaItemViewFieldMode {
-  edit
-  read
-  hidden
-}
-
-enum KeystoneAdminUIFieldMetaItemViewFieldPosition {
-  form
-  sidebar
-}
-
 type KeystoneAdminUIFieldGroupMeta {
   label: String!
   description: String
   fields: [KeystoneAdminUIFieldMeta!]!
+}
+
+type KeystoneAdminUIActionMeta {
+  key: String!
+  label: String!
+  icon: String
+  messages: KeystoneAdminUIActionMetaMessages!
+  graphql: KeystoneAdminUIActionMetaGraphQL
+  itemView: KeystoneAdminUIActionMetaItemView
+  listView: KeystoneAdminUIActionMetaListView!
+}
+
+type KeystoneAdminUIActionMetaMessages {
+  promptTitle: String!
+  promptTitleMany: String
+  prompt: String!
+  promptMany: String
+  promptConfirmLabel: String!
+  promptConfirmLabelMany: String
+  fail: String!
+  failMany: String
+  success: String!
+  successMany: String
+}
+
+type KeystoneAdminUIActionMetaGraphQL {
+  arguments: [KeystoneAdminUIActionMetaGraphQLArgument!]!
+  names: KeystoneAdminUIActionMetaGraphQLNames!
+}
+
+type KeystoneAdminUIActionMetaGraphQLArgument {
+  name: String!
+  type: String!
+  source: JSON
+}
+
+type KeystoneAdminUIActionMetaGraphQLNames {
+  one: String!
+  many: String
+}
+
+type KeystoneAdminUIActionMetaItemView {
+  actionMode: JSON!
+  navigation: KeystoneAdminUIActionMetaItemViewNavigation!
+  hidePrompt: Boolean!
+  hideToast: Boolean!
+}
+
+enum KeystoneAdminUIActionMetaItemViewNavigation {
+  follow
+  refetch
+  return
+}
+
+type KeystoneAdminUIActionMetaListView {
+  actionMode: JSON!
+}
+
+type KeystoneAdminUIGraphQL {
+  names: KeystoneAdminUIGraphQLNames!
+}
+
+type KeystoneAdminUIGraphQLNames {
+  outputTypeName: String!
+  whereInputName: String!
+  whereUniqueInputName: String!
+  createInputName: String!
+  createMutationName: String!
+  createManyMutationName: String!
+  relateToOneForCreateInputName: String!
+  relateToManyForCreateInputName: String!
+  itemQueryName: String!
+  listOrderName: String!
+  listQueryCountName: String!
+  listQueryName: String!
+  updateInputName: String!
+  updateMutationName: String!
+  updateManyInputName: String!
+  updateManyMutationName: String!
+  relateToOneForUpdateInputName: String!
+  relateToManyForUpdateInputName: String!
+  deleteMutationName: String!
+  deleteManyMutationName: String!
 }
 
 type KeystoneAdminUISort {

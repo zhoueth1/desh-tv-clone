@@ -10,13 +10,13 @@ function useOnScreen(element, rootMargin = '0px') {
       },
       { rootMargin }
     );
-    if (element) {
+    if (element.current) {
       observer.observe(element.current);
     }
     return () => {
       observer.disconnect();
     };
-  }, [element]);
+  });
 
   return isInViewport;
 }

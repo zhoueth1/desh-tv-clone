@@ -1,17 +1,15 @@
-import {createArticle} from './utils/createArticle'
+import { prisma } from '../../src/keystone/context';
+import { createArticle } from '../../src/server/database/createArticle';
 
-const mysql = require('mysql2/promise');
+export const config = { api: { bodyParser: { sizeLimit: '10mb' } } };
 
 export default async function handler(req, res) {
-  const connection = await mysql.createConnection(process.env.DATABASE_URL);
-
-  // console.log('Connected to createArticle')
-  const {articleSlug, imageData, title, categoryName, translatedDate, paragraphs, recommendedArticleSlugs} = req.body
-  
-  const createArticleData = await createArticle(articleSlug, imageData, title, categoryName, translatedDate, paragraphs, recommendedArticleSlugs, true, connection)
-
-  console.log("Create article data backend", createArticleData)
-  
-  // console.log("status of createArticle", status)
-  return res.status(createArticleData.status).json({data: createArticleData.data})
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
+  const { articleSlug, imageData, title, categoryName, translatedDate, paragraphs, recommendedArticleSlugs } = req.body || {};
+  if (!articleSlug || !title || !categoryName || !translatedDate || !paragraphs) {
+    return res.status(400).json({ error: 'Required article data is missing.' });
+  }
+  const result = await createArticle(articleSlug, imageData, title, categoryName, translatedDate,
+    paragraphs, recommendedArticleSlugs, true, prisma);
+  return res.status(result.status).json({ data: result.data ?? null });
 }

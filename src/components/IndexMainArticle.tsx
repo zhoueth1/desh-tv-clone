@@ -4,14 +4,14 @@ import Link from 'next/link';
 import { capitalize, upperCase } from 'lodash';
 import _ from 'lodash';
 
-const ArticleTitleWrapper = styled.h3<{ orientation: string }>`
+const ArticleTitleWrapper = styled.h3<{ $orientation: string }>`
   font-family: Teko;
-  text-align: ${(prop) => (prop.orientation == 'left' ? 'left' : 'right')};
+  text-align: ${(prop) => (prop.$orientation == 'left' ? 'left' : 'right')};
   margin: 0 30px;
   display: flex;
   flex-direction: column;
   &::before {
-    ${(prop) => (prop.orientation == 'left' ? '' : 'align-self: end;')}
+    ${(prop) => (prop.$orientation == 'left' ? '' : 'align-self: end;')}
     content: '';
     background-color: black;
     height: 8px;
@@ -30,10 +30,10 @@ const ArticleTitleWrapper = styled.h3<{ orientation: string }>`
   } ;
 `;
 
-const ArticleWrapper = styled.div<{ orientation: string }>`
+const ArticleWrapper = styled.div<{ $orientation: string }>`
   display: flex;
   ${(prop) =>
-    `flex-direction: ${prop.orientation == 'left' ? 'row;' : 'row-reverse;'}`}
+    `flex-direction: ${prop.$orientation == 'left' ? 'row;' : 'row-reverse;'}`}
   transition: 0.3s ease-out;
   cursor: pointer;
   &:hover {
@@ -102,9 +102,9 @@ const IndexMainArticle = ({
   infiniteScrollTrigger,
 }) => {
   return (
-    <Link href={`${decodeURI(slug)}`}>
+    <Link style={{ display: 'contents', color: 'inherit', textDecoration: 'none' }} href={`${decodeURI(slug)}`}>
       <ArticleWrapper
-        orientation={orientation}
+        $orientation={orientation}
         id={id}
         ref={infiniteScrollTrigger}
       >
@@ -116,7 +116,7 @@ const IndexMainArticle = ({
             <FilterDiv />
           </ImageFilter>
         )}
-        <ArticleTitleWrapper orientation={orientation}>
+        <ArticleTitleWrapper $orientation={orientation}>
           {category && (
             <ArticleCategory>
               {capitalize(category.replace('-', ' '))}

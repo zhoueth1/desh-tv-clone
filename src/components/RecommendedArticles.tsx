@@ -49,7 +49,7 @@ const RecommendedArticles = ({ data }) => {
     <React.Fragment>
       {data.map((article, i) => {
         return (
-          <Link href={`${article.slug}`} key={article.title}>
+          <Link style={{ display: 'contents', color: 'inherit', textDecoration: 'none' }} href={`${article.slug}`} key={article.slug}>
             <RecommendedArticle>
               <ImageFilter>
                 <RecommendedArticleImageWrapper>

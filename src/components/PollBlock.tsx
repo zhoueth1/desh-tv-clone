@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import styled from 'styled-components';
 import { client } from '../utils/graphqlRequest';
 import { gql } from 'graphql-request';
@@ -20,15 +20,13 @@ const ImageWrapper = styled.img`
   max-width: 100%;
 `;
 
-const PollForm = styled.form``;
-
 const Title = styled.h2`
   font-size: 20px;
   text-align: justify;
 `;
 
 const SelectionDiv = styled.div<{
-  isSelected: boolean;
+  $isSelected: boolean;
 }>`
   width: 90%;
   height: 30px;
@@ -44,7 +42,7 @@ const SelectionDiv = styled.div<{
     background: #008c75;
     color: #fff;
   }
-  background: ${(props) => (props.isSelected ? '#008c75' : '#d6d8d7')};
+  background: ${(props) => (props.$isSelected ? '#008c75' : '#d6d8d7')};
 `;
 
 const SubmissionWrapper = styled.div`
@@ -104,64 +102,31 @@ const PollBlock = ({
   deshNoCommentCount,
 }) => {
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitting = useRef(false);
   const [pollData, setPollData] = useState({
-    yesCount,
-    noCount,
-    noCommentCount,
-    totalVotes: yesCount + noCount + noCommentCount,
+    yesCount: (yesCount ?? 0) + (deshYesCount ?? 0),
+    noCount: (noCount ?? 0) + (deshNoCount ?? 0),
+    noCommentCount: (noCommentCount ?? 0) + (deshNoCommentCount ?? 0),
+    totalVotes: (yesCount ?? 0) + (noCount ?? 0) + (noCommentCount ?? 0) +
+      (deshYesCount ?? 0) + (deshNoCount ?? 0) + (deshNoCommentCount ?? 0),
   });
+  const [selection, setSelection] = useState<'yes' | 'no' | 'no-comment' | null>(null);
 
-  const [selection, setSelection] = useState({
-    yes: false,
-    no: false,
-    noComment: false,
-  });
-
-  const handleSelectionClick = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    console.log(event.target.className);
-    if (event.target.className.includes('yes')) {
-      setSelection({
-        yes: true,
-        no: false,
-        noComment: false,
-      });
+    if (submitting.current || submitted) return;
+    if (!selection) {
+      alert('Please select a poll option.');
+      return;
     }
-    if (event.target.className.includes('no')) {
-      setSelection({
-        yes: false,
-        no: true,
-        noComment: false,
-      });
-    }
-    if (event.target.className.includes('noc')) {
-      setSelection({
-        yes: false,
-        no: false,
-        noComment: true,
-      });
-    }
-  };
-
-  const handleSubmit = (event) => {
-    event.preventDefault();
-    client
-      .request(
+    submitting.current = true;
+    setIsSubmitting(true);
+    try {
+      const { votePoll } = await client.request<{ votePoll: PollData }>(
         gql`
-          mutation MyMutation(
-            $slug: String = ""
-            $no_comment_count: Int = 10
-            $no_count: Int = 10
-            $yes_count: Int = 10
-          ) {
-            updatePoll(
-              where: { slug: $slug }
-              data: {
-                yes_count: $yes_count
-                no_count: $no_count
-                no_comment_count: $no_comment_count
-              }
-            ) {
+          mutation VotePoll($slug: String!, $option: String!) {
+            votePoll(slug: $slug, option: $option) {
               yes_count
               no_count
               no_comment_count
@@ -171,39 +136,22 @@ const PollBlock = ({
             }
           }
         `,
-        {
-          slug: slug,
-          no_comment_count: selection.noComment
-            ? noCommentCount + 1
-            : noCommentCount,
-          yes_count: selection.yes ? yesCount + 1 : yesCount,
-          no_count: selection.no ? noCount + 1 : noCount,
-        }
-      )
-      .then((data: { updatePoll: PollData }) => {
-        console.log('SUBMITTED');
-        const { updatePoll } = data;
-        console.log(updatePoll);
-        setPollData({
-          yesCount: updatePoll.yes_count + updatePoll.desh_yes_count,
-          noCount: updatePoll.no_count + updatePoll.desh_no_count,
-          noCommentCount:
-            updatePoll.no_comment_count + updatePoll.desh_no_comment_count,
-          totalVotes:
-            updatePoll.no_comment_count +
-            updatePoll.desh_no_comment_count +
-            updatePoll.no_count +
-            updatePoll.desh_no_count +
-            updatePoll.yes_count +
-            updatePoll.desh_yes_count,
-        });
-        setSubmitted(true);
-      })
-      .catch((err) => {
-        console.log(err);
-      });
+        { slug, option: selection }
+      );
+      if (!votePoll) throw new Error('The poll no longer exists.');
+      const yes = (votePoll.yes_count ?? 0) + (votePoll.desh_yes_count ?? 0);
+      const no = (votePoll.no_count ?? 0) + (votePoll.desh_no_count ?? 0);
+      const noComment = (votePoll.no_comment_count ?? 0) + (votePoll.desh_no_comment_count ?? 0);
+      setPollData({ yesCount: yes, noCount: no, noCommentCount: noComment, totalVotes: yes + no + noComment });
+      setSubmitted(true);
+    } catch (error) {
+      console.error('Unable to submit vote', error);
+      alert('Unable to submit your vote. Please try again.');
+    } finally {
+      submitting.current = false;
+      setIsSubmitting(false);
+    }
   };
-
   return (
     <PollBlockWrapper>
       <MediaWrapper>
@@ -215,46 +163,46 @@ const PollBlock = ({
           <>
             <PollDataBar
               voteName="yes"
-              completed={(pollData.yesCount * 100) / pollData.totalVotes}
+              completed={(pollData.yesCount * 100) / (pollData.totalVotes || 1)}
             />
             <PollDataBar
               voteName="no"
-              completed={(pollData.noCount * 100) / pollData.totalVotes}
+              completed={(pollData.noCount * 100) / (pollData.totalVotes || 1)}
             />
             <PollDataBar
               voteName="noComment"
-              completed={(pollData.noCommentCount * 100) / pollData.totalVotes}
+              completed={(pollData.noCommentCount * 100) / (pollData.totalVotes || 1)}
             />
 
             <TotalVotesDisplay>
-              <text>Total Votes: {pollData.totalVotes}</text>
+              <span>Total Votes: {pollData.totalVotes}</span>
             </TotalVotesDisplay>
           </>
         ) : (
           <>
             <SelectionDiv
               className="yes"
-              isSelected={selection.yes}
-              onClick={handleSelectionClick}
+              $isSelected={selection === 'yes'}
+              onClick={() => setSelection('yes')}
             >
               YES
             </SelectionDiv>
             <SelectionDiv
               className="no"
-              isSelected={selection.no}
-              onClick={handleSelectionClick}
+              $isSelected={selection === 'no'}
+              onClick={() => setSelection('no')}
             >
               NO
             </SelectionDiv>
             <SelectionDiv
               className="noc"
-              isSelected={selection.noComment}
-              onClick={handleSelectionClick}
+              $isSelected={selection === 'no-comment'}
+              onClick={() => setSelection('no-comment')}
             >
               NO COMMENT
             </SelectionDiv>
 
-            <SubmitButton onClick={handleSubmit}>SUBMIT</SubmitButton>
+            <SubmitButton type="button" disabled={isSubmitting} onClick={handleSubmit}>SUBMIT</SubmitButton>
           </>
         )}
       </SubmissionWrapper>

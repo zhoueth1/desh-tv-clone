@@ -99,6 +99,7 @@ const IndexMainArticles = ({
   categories = false,
   infiniteScrollTrigger = null,
   targetArticleIndex = null,
+  hasMore = true,
   ...rest
 }) => {
   const isMobile = useMediaQuery('(max-width: 1200px)');
@@ -115,12 +116,12 @@ const IndexMainArticles = ({
                   slug={article.slug}
                   imageData={article.image_data}
                   orientation={index % 2 == 0 ? 'left' : 'right'}
-                  category={article.category.name}
+                  category={article.category?.name}
                   id={`article-${article.id}`}
                   infiniteScrollTrigger={
                     index == targetArticleIndex ? infiniteScrollTrigger : null
                   }
-                  key={article.id}
+                  key={article.id || article.slug}
                 />
               ))
             : articles.map((article, index) => {
@@ -139,12 +140,12 @@ const IndexMainArticles = ({
                     infiniteScrollTrigger={
                       index == targetArticleIndex ? infiniteScrollTrigger : null
                     }
-                    key={article.id}
+                    key={article.id || article.slug}
                   />
                 );
               }))}
         <SpinnerWrapper ref={spinnerRef}>
-          <Spinner />
+          {hasMore && <Spinner />}
         </SpinnerWrapper>
       </MainArticlesWrapper>
       {/* {!categories && !isMobile && (

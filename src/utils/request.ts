@@ -1,6 +1,8 @@
 import axios from 'axios';
 
 export default axios.create({
-  headers: { 'Access-Control-Allow-Origin': '*' },
-  baseURL: process.env.NEXT_PUBLIC_HOST_URL,
+  baseURL:
+    typeof window === 'undefined'
+      ? process.env.NEXT_PUBLIC_HOST_URL || 'http://localhost:3000'
+      : undefined,
 });

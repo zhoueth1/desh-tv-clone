@@ -17,21 +17,21 @@ const StyledContainer = styled.div`
 `;
 
 const StyledFiller = styled.div<{
-  completed: string;
+  $completed: string;
 }>`
   height: 100%;
-  width: ${(props) => props.completed}%;
+  width: ${(props) => props.$completed}%;
   background-color: #008c75;
   display: flex;
   align-items: center;
   justify-content: right;
 `;
 
-const StyledLabel = styled.div<{ align: string }>`
+const StyledLabel = styled.div<{ $align: string }>`
   position: absolute;
   color: black;
   align-self: center;
-  ${({ align }) => (align === 'right' ? 'right: 5%' : 'left : 5%')};
+  ${({ $align }) => ($align === 'right' ? 'right: 5%' : 'left : 5%')};
   z-index: 1;
 `;
 
@@ -46,9 +46,9 @@ const PollDataBar = ({ completed, voteName }) => {
   return (
     <StyledContainer>
       <InlineWrapper>
-        <StyledLabel align="left">{upperCase(voteName)}</StyledLabel>
-        <StyledFiller completed={_.toString(completed)}></StyledFiller>
-        <StyledLabel align="right">{`${Math.round(completed)}%`}</StyledLabel>
+        <StyledLabel $align="left">{upperCase(voteName)}</StyledLabel>
+        <StyledFiller $completed={_.toString(completed)}></StyledFiller>
+        <StyledLabel $align="right">{`${Math.round(completed)}%`}</StyledLabel>
       </InlineWrapper>
     </StyledContainer>
   );

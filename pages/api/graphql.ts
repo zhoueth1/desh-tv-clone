@@ -1,6 +1,26 @@
 import { createYoga } from 'graphql-yoga';
+import { isScalarType } from 'graphql';
+import { Readable } from 'node:stream';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { keystoneContext } from '../../src/keystone/context';
+
+// Yoga supplies WHATWG File objects; Keystone's image field consumes Node streams.
+const uploadScalar = keystoneContext.graphql.schema.getType('Upload');
+if (isScalarType(uploadScalar)) {
+  const parseUpload = uploadScalar.parseValue.bind(uploadScalar);
+  uploadScalar.parseValue = value => {
+    const file = value as Partial<File> | undefined;
+    if (file && typeof file.stream === 'function' && typeof file.arrayBuffer === 'function') {
+      return Promise.resolve({
+        filename: file.name || 'upload',
+        mimetype: file.type || 'application/octet-stream',
+        encoding: '7bit',
+        createReadStream: () => Readable.fromWeb(file.stream() as any),
+      });
+    }
+    return parseUpload(value);
+  };
+}
 
 /*
   An example of how to setup your own yoga graphql server

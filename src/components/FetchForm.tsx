@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
 import CreateArticlesSummary from './CreateArticlesSummary';
 import useCreateArticles from '../hooks/useCreateArticles';
-import _, { create } from 'lodash';
+
 import ProgressBar from './ProgressBar';
 import useCreatePolls from '../hooks/useCreatePolls';
 
@@ -78,91 +78,63 @@ const FetchForm = ({ creationObject }) => {
   const [startingNumber, setStartingNumber] = useState(0);
   const [endingNumber, setEndingNumber] = useState(0);
   const [showBar, setShowBar] = useState(false);
-  const [statuses, setStatuses] = useState({
+  const initialStatuses = () => ({
     completed: 0,
     attempts: 0,
     fetchingErrors: 0,
     creationErrors: 0,
-    errors: {
-      // Reason: count
-    },
+    errors: {},
   });
+  const [statuses, setStatuses] = useState(initialStatuses);
   const [startFetching, setStartFetching] = useState(false);
-  const [element, setElement] = useState<React.SyntheticEvent>();
-  const [controller] = useState(new AbortController());
+  const [controller, setController] = useState<AbortController | null>(null);
 
-  if (creationObject == 'articles') {
-    const pageUrl =
-      'https://www.desh.tv/templates/desh-web/all_news_page/more_news_ajax.php';
-
-    useCreateArticles(
-      pageUrl,
-      startingNumber,
-      endingNumber,
-      setPagesFetched,
-      controller.signal,
-      setStatuses,
-      pagesFetched,
-      startFetching
-    );
-  } else if (creationObject == 'polls') {
-    const pageUrl =
-      'https://www.desh.tv/templates/desh-web/opinion_poll/parent_content_list_ajax_new.php';
-
-    useCreatePolls(
-      pageUrl,
-      startingNumber,
-      endingNumber,
-      setPagesFetched,
-      controller.signal,
-      setStatuses,
-      pagesFetched,
-      startFetching
-    );
-  }
+  useCreateArticles(
+    'https://www.desh.tv/templates/desh-web/all_news_page/more_news_ajax.php',
+    startingNumber, endingNumber, setPagesFetched, controller?.signal,
+    setStatuses, pagesFetched, startFetching && creationObject === 'articles'
+  );
+  useCreatePolls(
+    'https://www.desh.tv/templates/desh-web/opinion_poll/parent_content_list_ajax_new.php',
+    startingNumber, endingNumber, setPagesFetched, controller?.signal,
+    setStatuses, pagesFetched, startFetching && creationObject === 'polls'
+  );
 
   useEffect(() => {
-    if (element) {
-      const target = element.target as HTMLFormElement;
-      const formData = new FormData(target);
-      if (startingNumber == _.toInteger(formData.get('starting-number'))) {
-        if (
-          endingNumber ==
-          (formData.get('ending-number')
-            ? _.toInteger(formData.get('ending-number'))
-            : 500000)
-        ) {
-          if (confirm('Are you sure you want to create all articles')) {
-            setStartFetching(true);
-            setShowBar(true);
-          } else {
-            setStartFetching(false);
-            setShowBar(false);
-          }
-        }
-      }
+    if (startFetching && pagesFetched >= endingNumber - startingNumber + 1) {
+      setStartFetching(false);
     }
-  }, [startingNumber, endingNumber, element]);
+  }, [startFetching, pagesFetched, endingNumber, startingNumber]);
 
-  const handleFetchAllArticles = (e) => {
-    e.preventDefault();
-    setElement(e);
-    const formData = new FormData(e.target);
-    setStartingNumber(_.toInteger(formData.get('starting-number')));
-    setEndingNumber(
-      formData.get('ending-number')
-        ? _.toInteger(formData.get('ending-number'))
-        : 500000
-    );
+  useEffect(() => () => controller?.abort(), [controller]);
+
+  const handleFetchAllArticles = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const start = Number(formData.get('starting-number'));
+    const end = formData.get('ending-number') ? Number(formData.get('ending-number')) : 500000;
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start) {
+      alert('Please enter a valid starting and ending page number.');
+      return;
+    }
+    if (!confirm(`Are you sure you want to create all ${creationObject}`)) return;
+    controller?.abort();
+    setController(new AbortController());
+    setPagesFetched(0);
+    setStatuses(initialStatuses());
+    setStartingNumber(start);
+    setEndingNumber(end);
+    setStartFetching(true);
+    setShowBar(true);
   };
 
-  const handleStopFetchAllArticles = (e) => {
-    e.preventDefault();
-    controller.abort();
-    alert('ALL API CALLS HAVE BEEN ABORTED');
+  const handleStopFetchAllArticles = (event) => {
+    event.preventDefault();
+    controller?.abort();
+    setStartFetching(false);
     setShowBar(false);
+    alert('ALL API CALLS HAVE BEEN ABORTED');
   };
-
   return (
     <FetchAllArticlesForm onSubmit={handleFetchAllArticles}>
       <Text>Fetch All {creationObject}:</Text>

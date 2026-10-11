@@ -1,41 +1,24 @@
-import _ from 'lodash';
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { prisma } from '../../src/keystone/context';
+import { readLegacyRows } from '../../src/server/database/legacy';
 
-const mysql = require('mysql2/promise');
-require('dotenv').config();
-
-export default async function handler(req, res) {
-  let data, oldConnection, newConnection;
-
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
+  if (!process.env.OLD_DATABASE_URL) return res.status(400).json({ error: 'OLD_DATABASE_URL must be configured to transfer legacy data.' });
   try {
-    oldConnection = await mysql.createConnection(process.env.OLD_DATABASE_URL);
-    newConnection = await mysql.createConnection(process.env.DATABASE_URL);
-
-    const [oldRecommendedArticles] = await oldConnection.execute(
-      'SELECT * FROM recommended_articles'
-    );
-
-    console.log(oldRecommendedArticles);
-
-    const values = oldRecommendedArticles.reduce(
-      (acc, recommendedArticle, i) => {
-        if (i > 0) {
-          return `${acc},(${recommendedArticle.article_id}, ${recommendedArticle.recommended_article_id})`;
-        } else {
-          return `(${recommendedArticle.article_id}, ${recommendedArticle.recommended_article_id}`;
-        }
-      },
-      ''
-    );
-
-    newConnection.execute(
-      `INSERT INTO _Article_recommendedArticles(A,B) VALUES${values}`
-    );
-
-    console.log('SUCCESS');
-
-    return res.status(200);
-  } catch (err) {
-    console.log(err);
-    return res.status(400);
+    const relations = await readLegacyRows('recommended_articles');
+    let count = 0;
+    for (const relation of relations) {
+      const id = Number(relation.article_id);
+      const recommendedId = Number(relation.recommended_article_id);
+      const expected = new Set([id, recommendedId]).size;
+      if (await prisma.article.count({ where: { id: { in: [id, recommendedId] } } }) !== expected) continue;
+      await prisma.article.update({ where: { id }, data: { recommendedArticles: { connect: { id: recommendedId } } } });
+      count++;
+    }
+    return res.status(200).json({ count });
+  } catch (error) {
+    console.error('Recommended article transfer failed:', error.message);
+    return res.status(400).json({ error: 'Unable to transfer recommendations from the legacy database.' });
   }
 }

@@ -1,38 +1,23 @@
-import { getRecommendedArticles } from './utils/recommendedArticles'
-
-require('dotenv').config()
-const mysql = require('mysql2/promise')
+import { prisma } from '../../src/keystone/context';
+import { getRecommendedArticles } from '../../src/server/database/recommendedArticles';
 
 export default async function handler(req, res) {
-  const connection = await mysql.createConnection(process.env.DATABASE_URL)
-  console.log('Connected to PlanetScale!')
-  const articleSlug = req.body.articleSlug
-  const articleSql = `SELECT * FROM articles WHERE slug='${articleSlug}'`
-  const [results] = await connection.execute(articleSql)
-  let status;
-  let data;
-  if (!results.length) {
-    status = 400
-  } else {
-    const {image_data, title, translated_date, paragraphs} = results[0]
-    const articleId = results[0].id
-    
-    const {recommendedArticleTitles, recommendedArticleImageData, recommendedArticleLinks} = await getRecommendedArticles(articleId, connection);
-    
-    // console.log("RECOMMENDED ARTICLE TITLES" , recommendedArticleTitles)
-    
-    data = {
-      image_data,
-      title,
-      translated_date,
-      paragraphs,
-      recommended_article_titles: recommendedArticleTitles,
-      recommended_article_images: recommendedArticleImageData,
-      recommended_article_links: recommendedArticleLinks,
-    }
-    
-    status = 200
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
+  const articleSlug = req.body?.articleSlug;
+  if (typeof articleSlug !== 'string') return res.status(400).json({ error: 'articleSlug is required.' });
+  try {
+    const article = await prisma.article.findUnique({ where: { slug: articleSlug } });
+    if (!article) return res.status(400).json({ data: null });
+    const recommended = await getRecommendedArticles(article.id, prisma);
+    return res.status(200).json({ data: {
+      image_data: article.image_data, title: article.title, translated_date: article.translated_date,
+      paragraphs: article.content,
+      recommended_article_titles: recommended.recommendedArticleTitles,
+      recommended_article_images: recommended.recommendedArticleImageData,
+      recommended_article_links: recommended.recommendedArticleLinks,
+    } });
+  } catch (error) {
+    console.error('Article lookup failed:', error.message);
+    return res.status(500).json({ error: 'Unable to load the article.' });
   }
-  connection.end()
-  return res.status(status).json({data});
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { client } from '../../src/utils/graphqlRequest';
 import { gql } from 'graphql-request';
 import { Polls } from '../../src/types/data';
@@ -8,6 +8,7 @@ import styled, { keyframes } from 'styled-components';
 import useMediaQuery from '../../src/hooks/useMediaQuery';
 import PollBlock from '../../src/components/PollBlock';
 import useOnScreen from '../../src/hooks/useOnScreen';
+import useInfiniteList from '../../src/hooks/useInfiniteList';
 
 const fadeIn = keyframes`
   0% {opacity: 0}
@@ -18,9 +19,9 @@ const fadeOut = keyframes`
   0% {opacity: 1}
   100% {opacity: 0}
 `;
-const PageWrapper = styled.div<{ leavingScreen: boolean }>`
+const PageWrapper = styled.div<{ $leavingScreen: boolean }>`
   font-family: Teko;
-  animation-name: ${({ leavingScreen }) => (leavingScreen ? fadeOut : fadeIn)};
+  animation-name: ${({ $leavingScreen }) => ($leavingScreen ? fadeOut : fadeIn)};
   animation-duration: 0.5s;
   width: 100%;
 `;
@@ -133,66 +134,45 @@ const poll = ({ data }: { data: { polls: Polls } }) => {
   const isMobile = useMediaQuery('(max-width: 768px)');
   const ref = useRef<HTMLDivElement>(null);
   const isVisible = useOnScreen(ref);
-  const [polls, setPolls] = useState({
-    skipCount: 0,
-    polls: data.polls,
-  });
+  const [pageData, setPageData] = useState(data);
   const [leavingScreen, setLeavingScreen] = useState(false);
 
   useEffect(() => {
-    if (polls.polls != data.polls) {
-      setLeavingScreen(true);
-      setTimeout(() => {
-        setPolls({
-          skipCount: 0,
-          polls: data.polls,
-        });
+    if (pageData === data) return;
+    setLeavingScreen(true);
+    const timeout = setTimeout(() => {
+      setPageData(data);
+      setLeavingScreen(false);
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [data, pageData]);
 
-        setLeavingScreen(false);
-      }, 500);
-    }
-  }, [data]);
-
-  useEffect(() => {
-    if (isVisible) {
-      console.log('ON SCREEN');
-      client
-        .request(
-          gql`
-            query MyQuery($skip: Int = 10) {
-              polls(take: 9, orderBy: { translated_date: desc }, skip: $skip) {
-                image_data
-                desh_no_comment_count
-                desh_no_count
-                desh_yes_count
-                yes_count
-                no_count
-                no_comment_count
-                slug
-                title
-                translated_date
-              }
-            }
-          `,
-          {
-            skip: (polls.skipCount + 1) * 9,
+  const loadMore = useCallback(async (skip: number, signal: AbortSignal) => {
+    const result = await client.request<{ polls: Polls }>({
+      document: gql`
+        query MorePolls($skip: Int!) {
+          polls(take: 9, orderBy: { translated_date: desc }, skip: $skip) {
+            image_data
+            desh_no_comment_count
+            desh_no_count
+            desh_yes_count
+            yes_count
+            no_count
+            no_comment_count
+            slug
+            title
+            translated_date
           }
-        )
-        .then((newData: { polls: Polls }) => {
-          setPolls((prevPolls) => {
-            const value = {
-              skipCount: prevPolls.skipCount + 1,
-              polls: [...prevPolls.polls, ...newData.polls],
-            };
-
-            return value;
-          });
-        });
-    }
-  }, [isVisible]);
-
+        }
+      `,
+      variables: { skip },
+      signal,
+    });
+    return result.polls;
+  }, []);
+  const polls = useInfiniteList(pageData.polls, isVisible && !leavingScreen, 9, loadMore);
   return (
-    <PageWrapper key="polls" leavingScreen={leavingScreen}>
+    <PageWrapper key="polls" $leavingScreen={leavingScreen}>
       {isMobile ? <MobileNav /> : <Navbar />}
       <ContentWrapper>
         <MainArticlesWrapper>
@@ -200,8 +180,9 @@ const poll = ({ data }: { data: { polls: Polls } }) => {
           <PollsAreaWrapper>
             <PollsWrapper>
               {polls &&
-                polls.polls.map((poll) => (
+                polls.items.map((poll) => (
                   <PollBlock
+                    key={poll.slug}
                     slug={poll.slug}
                     date={poll.translated_date}
                     title={poll.title}
@@ -219,7 +200,7 @@ const poll = ({ data }: { data: { polls: Polls } }) => {
         </MainArticlesWrapper>
       </ContentWrapper>
       <SpinnerWrapper ref={ref}>
-        <Spinner />
+        {polls.hasMore && <Spinner />}
       </SpinnerWrapper>
     </PageWrapper>
   );

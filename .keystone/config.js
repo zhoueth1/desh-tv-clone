@@ -33,6 +33,62 @@ __export(keystone_exports, {
 });
 module.exports = __toCommonJS(keystone_exports);
 var import_core5 = require("@keystone-6/core");
+var import_adapter_pg = require("@prisma/adapter-pg");
+
+// src/keystone/database.ts
+function databasePoolConfig() {
+  return {
+    connectionString: process.env.DATABASE_URL,
+    max: 5,
+    connectionTimeoutMillis: 1e4,
+    idleTimeoutMillis: 3e4
+  };
+}
+
+// src/keystone/storage.ts
+var import_promises = require("node:fs/promises");
+var import_node_path = __toESM(require("node:path"));
+var imageDirectory = import_node_path.default.resolve(process.cwd(), "public/images");
+function imagePath(key) {
+  if (!/^[A-Za-z0-9_-]+\.[A-Za-z0-9]+$/.test(key)) {
+    throw new Error("Invalid image storage key.");
+  }
+  return import_node_path.default.join(imageDirectory, key);
+}
+var imageStorage = {
+  async put(key, stream) {
+    await (0, import_promises.mkdir)(imageDirectory, { recursive: true });
+    await (0, import_promises.writeFile)(imagePath(key), stream);
+  },
+  async delete(key) {
+    await (0, import_promises.unlink)(imagePath(key)).catch((error) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+  },
+  url(key) {
+    const baseUrl = process.env.BASE_URL || process.env.NEXT_PUBLIC_HOST_URL || "http://localhost:3000";
+    return `${baseUrl.replace(/\/$/, "")}/images/${encodeURIComponent(key)}`;
+  }
+};
+async function resolveImageData({ resolvedData, inputData, item }) {
+  if (Object.prototype.hasOwnProperty.call(inputData, "image_data")) {
+    return resolvedData.image_data;
+  }
+  if (!Object.prototype.hasOwnProperty.call(inputData, "image")) {
+    return item?.image_data ?? null;
+  }
+  const uploaded = resolvedData.image;
+  if (!uploaded?.id || !uploaded?.extension) return null;
+  const bytes = await (0, import_promises.readFile)(imagePath(`${uploaded.id}.${uploaded.extension}`));
+  const mime = uploaded.extension === "jpg" ? "jpeg" : uploaded.extension;
+  return `data:image/${mime};base64,${bytes.toString("base64")}`;
+}
+async function storedImage(key) {
+  const bytes = await (0, import_promises.readFile)(imagePath(key));
+  const extension = import_node_path.default.extname(key).slice(1).toLowerCase();
+  const contentTypes = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp" };
+  return { bytes, contentType: contentTypes[extension] || "application/octet-stream" };
+}
 
 // src/keystone/schemas/user.ts
 var import_core = require("@keystone-6/core");
@@ -69,92 +125,39 @@ var user_default = (0, import_core.list)({
 // src/keystone/schemas/article.ts
 var import_core2 = require("@keystone-6/core");
 var import_access2 = require("@keystone-6/core/access");
-var import_axios = __toESM(require("axios"));
-var import_node_fs = __toESM(require("node:fs"));
 var import_fields2 = require("@keystone-6/core/fields");
 var import_fields_document = require("@keystone-6/fields-document");
-var import_dotenv = __toESM(require("dotenv"));
-import_dotenv.default.config();
 function buildSlug(input) {
   return "/article/" + input.trim().toLowerCase().replace(/[^\w ]+/g, "").replace(/ +/g, "-");
 }
 var article_default = (0, import_core2.list)({
   access: import_access2.allowAll,
+  graphql: { plural: "Articles" },
   fields: {
     slug: (0, import_fields2.text)({
       hooks: {
         resolveInput: ({ operation, resolvedData, inputData }) => {
-          if (operation === "create" && !inputData.slug) {
-            return buildSlug(inputData.title);
-          }
+          if (operation === "create" && !inputData.slug) return buildSlug(inputData.title);
           return resolvedData.slug;
         }
       },
-      ui: {
-        createView: {
-          fieldMode: "hidden"
-        }
-      },
-      db: {
-        nativeType: "VarChar(380)"
-      },
+      ui: { createView: { fieldMode: "hidden" } },
+      db: { nativeType: "VarChar(380)" },
       isIndexed: "unique"
     }),
-    image: (0, import_fields2.image)({ storage: "my_images" }),
+    image: (0, import_fields2.image)({ storage: imageStorage }),
     image_data: (0, import_fields2.text)({
-      db: {
-        //@ts-ignore
-        nativeType: "Text",
-        isNullable: true
-      },
-      hooks: {
-        resolveInput: async ({ operation, resolvedData, inputData }) => {
-          if (!resolvedData.image_data) {
-            console.log(resolvedData.image);
-            const { data } = await import_axios.default.get(
-              `${process.env.BASE_URL}/images/${resolvedData.image.id}.${resolvedData.image.extension}`,
-              {
-                responseEncoding: "base64"
-              }
-            );
-            const imageBase64 = `data:image/${resolvedData.image.extension == "jpg" ? "jpeg" : resolvedData.image.extension};base64,` + data;
-            import_node_fs.default.writeFile("./base64.txt", imageBase64, (err) => {
-              if (err) {
-                console.log(err);
-              }
-            });
-            return imageBase64;
-          }
-          return null;
-        }
-      },
-      ui: {
-        createView: {
-          fieldMode: "hidden"
-        }
-      },
-      validation: {
-        isRequired: false
-      }
+      db: { nativeType: "Text", isNullable: true },
+      hooks: { resolveInput: resolveImageData },
+      ui: { createView: { fieldMode: "hidden" } },
+      validation: { isRequired: false }
     }),
-    title: (0, import_fields2.text)({
-      isIndexed: "unique",
-      validation: { isRequired: true }
-    }),
+    title: (0, import_fields2.text)({ isIndexed: "unique", validation: { isRequired: true } }),
     translated_date: (0, import_fields2.timestamp)({ validation: { isRequired: true } }),
-    created_at: (0, import_fields2.timestamp)({
-      defaultValue: { kind: "now" },
-      validation: { isRequired: true }
-    }),
+    created_at: (0, import_fields2.timestamp)({ defaultValue: { kind: "now" }, validation: { isRequired: true } }),
     content: (0, import_fields_document.document)({
       formatting: true,
-      layouts: [
-        [1, 1],
-        [1, 1, 1],
-        [2, 1],
-        [1, 2],
-        [1, 2, 1]
-      ],
+      layouts: [[1, 1], [1, 1, 1], [2, 1], [1, 2], [1, 2, 1]],
       links: true,
       dividers: true
     }),
@@ -201,138 +204,46 @@ var category_default = (0, import_core3.list)({
 // src/keystone/schemas/poll.ts
 var import_core4 = require("@keystone-6/core");
 var import_access4 = require("@keystone-6/core/access");
-var import_axios2 = __toESM(require("axios"));
-var import_node_fs2 = __toESM(require("node:fs"));
 var import_fields4 = require("@keystone-6/core/fields");
-var import_dotenv2 = __toESM(require("dotenv"));
-import_dotenv2.default.config();
 function buildSlug2(input) {
   return "/poll/" + input.trim().toLowerCase().replace(/[^\w ]+/g, "").replace(/ +/g, "-").substring(0, Math.min(input.length, 374));
 }
+var voteField = (required) => (0, import_fields4.integer)({
+  defaultValue: 0,
+  validation: { isRequired: required },
+  ui: { createView: { fieldMode: "hidden" } }
+});
 var poll_default = (0, import_core4.list)({
   access: import_access4.allowAll,
+  graphql: { plural: "Polls" },
   fields: {
     slug: (0, import_fields4.text)({
       hooks: {
         resolveInput: ({ operation, resolvedData, inputData }) => {
-          if (operation === "create" && !inputData.slug) {
-            return buildSlug2(inputData.title);
-          }
+          if (operation === "create" && !inputData.slug) return buildSlug2(inputData.title);
           return resolvedData.slug;
         }
       },
-      ui: {
-        createView: {
-          fieldMode: "hidden"
-        }
-      },
-      db: {
-        nativeType: "VarChar(380)"
-      },
+      ui: { createView: { fieldMode: "hidden" } },
+      db: { nativeType: "VarChar(380)" },
       isIndexed: "unique"
     }),
-    image: (0, import_fields4.image)({ storage: "my_images" }),
+    image: (0, import_fields4.image)({ storage: imageStorage }),
     image_data: (0, import_fields4.text)({
-      db: {
-        //@ts-ignore
-        nativeType: "Text",
-        isNullable: true
-      },
-      hooks: {
-        resolveInput: async ({ operation, resolvedData, inputData, item }) => {
-          if (!resolvedData.image_data && resolvedData.image.id) {
-            console.log(resolvedData.image);
-            const { data } = await import_axios2.default.get(
-              `${process.env.BASE_URL}/images/${resolvedData.image.id}.${resolvedData.image.extension}`,
-              {
-                responseEncoding: "base64"
-              }
-            );
-            const imageBase64 = `data:image/${resolvedData.image.extension == "jpg" ? "jpeg" : resolvedData.image.extension};base64,` + data;
-            import_node_fs2.default.writeFile("./base64.txt", imageBase64, (err) => {
-              if (err) {
-                console.log(err);
-              }
-            });
-            return imageBase64;
-          } else if (item) {
-            return item.image_data;
-          }
-          return null;
-        }
-      },
-      ui: {
-        createView: {
-          fieldMode: "hidden"
-        }
-      },
-      validation: {
-        isRequired: false
-      }
+      db: { nativeType: "Text", isNullable: true },
+      hooks: { resolveInput: resolveImageData },
+      ui: { createView: { fieldMode: "hidden" } },
+      validation: { isRequired: false }
     }),
-    title: (0, import_fields4.text)({
-      isIndexed: "unique",
-      validation: { isRequired: true }
-    }),
+    title: (0, import_fields4.text)({ isIndexed: "unique", validation: { isRequired: true } }),
     translated_date: (0, import_fields4.timestamp)({ validation: { isRequired: true } }),
-    created_at: (0, import_fields4.timestamp)({
-      defaultValue: { kind: "now" },
-      validation: { isRequired: true }
-    }),
-    yes_count: (0, import_fields4.integer)({
-      defaultValue: 0,
-      validation: { isRequired: true },
-      ui: {
-        createView: {
-          fieldMode: "hidden"
-        }
-      }
-    }),
-    no_count: (0, import_fields4.integer)({
-      defaultValue: 0,
-      validation: { isRequired: true },
-      ui: {
-        createView: {
-          fieldMode: "hidden"
-        }
-      }
-    }),
-    no_comment_count: (0, import_fields4.integer)({
-      defaultValue: 0,
-      validation: { isRequired: true },
-      ui: {
-        createView: {
-          fieldMode: "hidden"
-        }
-      }
-    }),
-    desh_yes_count: (0, import_fields4.integer)({
-      defaultValue: 0,
-      validation: { isRequired: false },
-      ui: {
-        createView: {
-          fieldMode: "hidden"
-        }
-      }
-    }),
-    desh_no_count: (0, import_fields4.integer)({
-      defaultValue: 0,
-      validation: { isRequired: false },
-      ui: {
-        createView: {
-          fieldMode: "hidden"
-        }
-      }
-    }),
-    desh_no_comment_count: (0, import_fields4.integer)({
-      defaultValue: 0,
-      validation: { isRequired: false },
-      ui: {
-        createView: {
-          fieldMode: "hidden"
-        }
-      }
-    })
+    created_at: (0, import_fields4.timestamp)({ defaultValue: { kind: "now" }, validation: { isRequired: true } }),
+    yes_count: voteField(true),
+    no_count: voteField(true),
+    no_comment_count: voteField(true),
+    desh_yes_count: voteField(false),
+    desh_no_count: voteField(false),
+    desh_no_comment_count: voteField(false)
   }
 });
 
@@ -348,28 +259,57 @@ var lists = {
 var keystone_default = (0, import_core5.config)({
   db: {
     provider: "postgresql",
-    url: process.env.DATABASE_URL,
-    additionalPrismaDatasourceProperties: {
-      relationMode: "prisma"
-    },
-    enableLogging: true,
-    useMigrations: false,
+    prismaClientOptions: () => ({
+      adapter: new import_adapter_pg.PrismaPg(databasePoolConfig()),
+      log: ["warn", "error"]
+    }),
+    // Keep the original relation mode and integer IDs.
+    extendPrismaSchema: (schema) => schema.replace(
+      'provider = "postgresql"',
+      'provider = "postgresql"\n  relationMode = "prisma"'
+    ),
     idField: { kind: "autoincrement" }
   },
-  ui: {
-    basePath: "/admin"
-  },
+  ui: { basePath: "/admin" },
   lists,
-  storage: {
-    my_images: {
-      kind: "local",
-      type: "image",
-      generateUrl: (path) => `http://localhost:3000/images${path}`,
-      serverRoute: {
-        path: "/images"
-      },
-      storagePath: "public/images"
+  server: {
+    extendExpressApp: (app) => {
+      app.use("/images", async (req, res, next) => {
+        if (req.method !== "GET" && req.method !== "HEAD") return next();
+        try {
+          const { bytes, contentType } = await storedImage(decodeURIComponent(req.path.slice(1)));
+          res.setHeader("Content-Type", contentType);
+          res.setHeader("Content-Length", bytes.length);
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+          res.end(req.method === "HEAD" ? void 0 : bytes);
+        } catch {
+          next();
+        }
+      });
     }
+  },
+  graphql: {
+    extendGraphqlSchema: import_core5.g.extend((base) => ({
+      mutation: {
+        votePoll: import_core5.g.field({
+          type: base.object("Poll"),
+          args: {
+            slug: import_core5.g.arg({ type: import_core5.g.nonNull(import_core5.g.String) }),
+            option: import_core5.g.arg({ type: import_core5.g.nonNull(import_core5.g.String) })
+          },
+          async resolve(_source, { slug, option }, context) {
+            const fields = { yes: "yes_count", no: "no_count", "no-comment": "no_comment_count" };
+            const field = fields[option];
+            if (!field) throw new Error("Choose yes, no, or no-comment.");
+            const poll = await context.prisma.poll.update({
+              where: { slug },
+              data: { [field]: { increment: 1 } }
+            });
+            return context.db.Poll.findOne({ where: { id: String(poll.id) } });
+          }
+        })
+      }
+    }))
   }
 });
 //# sourceMappingURL=config.js.map

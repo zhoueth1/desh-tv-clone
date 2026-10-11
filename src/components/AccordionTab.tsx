@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import styled from 'styled-components';
-import _ from 'lodash';
 
 const Tab = styled.div`
   width: 100%;
@@ -9,7 +8,7 @@ const Tab = styled.div`
 `;
 
 const TabLabel = styled.label<{
-  isChecked: boolean;
+  $isChecked: boolean;
 }>`
   border-radius: 8px;
   display: flex;
@@ -17,7 +16,7 @@ const TabLabel = styled.label<{
   padding: 1em;
   font-weight: bold;
   cursor: pointer;
-  background: ${({ isChecked }) => (isChecked ? '#008c75' : ' #008c75')};
+  background: ${({ $isChecked }) => ($isChecked ? '#008c75' : ' #008c75')};
   &:hover {
     background: #008c75;
   }
@@ -28,18 +27,18 @@ const TabLabel = styled.label<{
     height: 1em;
     text-align: center;
     transition: all 0.35s;
-    ${({ isChecked }) => (isChecked ? 'transform: rotate(90deg)' : '')};
+    ${({ $isChecked }) => ($isChecked ? 'transform: rotate(90deg)' : '')};
   }
 `;
 
 const TabContent = styled.div<{
-  isChecked: boolean;
+  $isChecked: boolean;
 }>`
-  padding: ${({ isChecked }) => (isChecked ? '1em' : '0 1em')};
+  padding: ${({ $isChecked }) => ($isChecked ? '1em' : '0 1em')};
   color: black;
   background: #d6d8d7;
   transition: all 0.35s;
-  max-height: ${({ isChecked }) => (isChecked ? '100vh' : '0')};
+  max-height: ${({ $isChecked }) => ($isChecked ? '100vh' : '0')};
 `;
 
 const CheckBox = styled.input`
@@ -50,24 +49,20 @@ const CheckBox = styled.input`
 
 const AccordionTab = ({ labelName, children }) => {
   const [isChecked, setIsChecked] = useState(false);
-  const htmlId = _.uniqueId('chck');
-
-  const handleCheckBoxClick = (e) => {
-    e.preventDefault();
-    setIsChecked((prevIsChecked) => !prevIsChecked);
-  };
+  const htmlId = useId();
 
   return (
     <Tab>
       <CheckBox
         type="checkbox"
         id={htmlId}
-        onClick={(event) => handleCheckBoxClick(event)}
+        checked={isChecked}
+        onChange={() => setIsChecked((previous) => !previous)}
       />
-      <TabLabel htmlFor={htmlId} isChecked={isChecked}>
+      <TabLabel htmlFor={htmlId} $isChecked={isChecked}>
         {labelName}
       </TabLabel>
-      <TabContent isChecked={isChecked}>{children}</TabContent>
+      <TabContent $isChecked={isChecked}>{children}</TabContent>
     </Tab>
   );
 };

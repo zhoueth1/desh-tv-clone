@@ -18,7 +18,7 @@ const TabsWrapper = styled.div`
 
 const CreateArticlesSummary = ({ statuses }) => {
   const insertLinksIntoErrors = (endResult, currentLink, errorNames) => {
-    return errorNames.reduce(
+    return (errorNames || []).reduce(
       (acc, errorName) => {
         if (Object.keys(acc).includes(errorName)) {
           return {
@@ -77,7 +77,7 @@ const CreateArticlesSummary = ({ statuses }) => {
                 <b>Total Created Articles: {statuses.completed}</b>
               </div>
               <div>Total Attempted Articles {statuses.attempts}</div>
-              {(statuses.creationErrors > 0 || statuses.fetchingErrors) > 0 && (
+              {(statuses.creationErrors > 0 || statuses.fetchingErrors > 0) && (
                 <AccordionTab labelName="Errors">
                   <div>
                     <b>Total Errors {Object.keys(statuses.errors).length} </b>
@@ -86,9 +86,9 @@ const CreateArticlesSummary = ({ statuses }) => {
                   {statuses.fetchingErrors > 0 && (
                     <AccordionTab labelName="Fetching Errors">
                       {Object.keys(fetchingErrors).map((errorName) => (
-                        <AccordionTab labelName={`${errorName}:`}>
+                        <AccordionTab labelName={`${errorName}:`} key={errorName}>
                           {fetchingErrors[errorName].map((link, i) => (
-                            <span>
+                            <span key={link}>
                               <a href={link}> {i + 1} </a>
                             </span>
                           ))}
@@ -100,9 +100,9 @@ const CreateArticlesSummary = ({ statuses }) => {
                   {statuses.creationErrors > 0 && (
                     <AccordionTab labelName="Creation Errors">
                       {Object.keys(creationErrors).map((errorName) => (
-                        <AccordionTab labelName={`${errorName}:`}>
+                        <AccordionTab labelName={`${errorName}:`} key={errorName}>
                           {creationErrors[errorName].map((link, i) => (
-                            <span>
+                            <span key={link}>
                               <a href={link}> {i + 1} </a>
                             </span>
                           ))}

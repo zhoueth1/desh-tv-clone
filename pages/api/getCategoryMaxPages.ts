@@ -1,32 +1,27 @@
-import * as cheerio from 'cheerio';
-import axios from 'axios';
-import _ from 'lodash';
+﻿import * as cheerio from 'cheerio';
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { resolveDeshUrl, scrapeRequest } from '../../src/server/scraper/request';
 
-const mysql = require('mysql2/promise');
-require('dotenv').config();
-
-export default async function handler(req, res) {
-  let data, connection;
-
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    return res.status(405).json({ error: 'Use POST to read category pages.' });
+  }
   try {
-    connection = await mysql.createConnection(process.env.DATABASE_URL);
-    ({ data } = await axios.get(req.body.pageUrl, {
-      headers: { 'Access-Control-Allow-Origin': '*' },
-      baseURL: process.env.NEXT_PUBLIC_HOST_URL,
-    }));
-
+    const pageUrl = resolveDeshUrl(req.body?.pageUrl);
+    const { data } = await scrapeRequest.get<string>(pageUrl);
     const dom = cheerio.load(data);
-    const categoryMaxPagesText = dom(
-      '.col-md-2.d-flex.col-4.justify-content-center.justify-content-md-end.text-center.text-md-right'
-    ).text();
-
-    const categoryMaxPages = _.toInteger(
-      categoryMaxPagesText.substring(categoryMaxPagesText.indexOf('/') + 2)
-    );
-
-    res.status(200).json({ categoryMaxPages });
+    const summary = dom('.col-md-2.d-flex.col-4.justify-content-center.justify-content-md-end.text-center.text-md-right').text()
+      .replace(/[\u09e6-\u09ef]/g, (digit) => String(digit.charCodeAt(0) - 0x09e6));
+    const lastPage = summary.match(/\/\s*(\d+)/)?.[1];
+    const pages = dom('a[href]').toArray().map((anchor) => {
+      try {
+        const url = new URL(dom(anchor).attr('href'), pageUrl);
+        return Number(url.searchParams.get('page')) || 0;
+      } catch { return 0; }
+    });
+    return res.status(200).json({ categoryMaxPages: Number(lastPage) || Math.max(1, ...pages) });
   } catch {
-    console.log('CANNOT GAIN CONNECTION TO BACKEND / CANNOT REACH DESH.TV');
-    return res.status(400);
+    return res.status(400).json({ error: 'The category listing could not be fetched.' });
   }
 }

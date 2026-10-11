@@ -4,11 +4,12 @@ const useMediaQuery = (query: string) => {
   const [queryStatus, changeQueryStatus] = useState(false);
 
   useEffect(() => {
-    changeQueryStatus(window.matchMedia(query).matches);
-    addEventListener('resize', () => {
-      changeQueryStatus(window.matchMedia(query).matches);
-    });
-  }, []);
+    const mediaQuery = window.matchMedia(query);
+    const update = () => changeQueryStatus(mediaQuery.matches);
+    update();
+    mediaQuery.addEventListener('change', update);
+    return () => mediaQuery.removeEventListener('change', update);
+  }, [query]);
 
   return queryStatus;
 };

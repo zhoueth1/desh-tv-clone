@@ -2,14 +2,13 @@
 // Modify your Keystone config when you want to change this.
 
 datasource postgresql {
-  url               = env("DATABASE_URL")
-  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
-  provider          = "postgresql"
-  relationMode      = "prisma"
+  provider     = "postgresql"
+  relationMode = "prisma"
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "./generated/prisma"
 }
 
 model User {
@@ -23,11 +22,11 @@ model User {
 model Article {
   id                               Int       @id @default(autoincrement())
   slug                             String    @unique @default("") @postgresql.VarChar(380)
-  image_filesize                   Int?
+  image_id                         String?
   image_extension                  String?
+  image_filesize                   Int?
   image_width                      Int?
   image_height                     Int?
-  image_id                         String?
   image_data                       String?   @postgresql.Text
   title                            String    @unique @default("")
   translated_date                  DateTime
@@ -51,11 +50,11 @@ model Category {
 model Poll {
   id                    Int      @id @default(autoincrement())
   slug                  String   @unique @default("") @postgresql.VarChar(380)
-  image_filesize        Int?
+  image_id              String?
   image_extension       String?
+  image_filesize        Int?
   image_width           Int?
   image_height          Int?
-  image_id              String?
   image_data            String?  @postgresql.Text
   title                 String   @unique @default("")
   translated_date       DateTime

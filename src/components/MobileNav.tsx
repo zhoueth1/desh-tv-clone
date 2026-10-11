@@ -21,7 +21,7 @@ const BurgerButton = styled.button`
   cursor: pointer;
   padding: 0;
   margin: 0 16px 0 0;
-  :hover {
+  &:hover {
     color: rgb(0, 140, 117);
   }
 `;

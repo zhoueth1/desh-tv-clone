@@ -1,6 +1,7 @@
 import { SessionProvider } from 'next-auth/react';
 import { useEffect, useState } from 'react';
-import styled, { keyframes } from 'styled-components';
+import styled, { keyframes, StyleSheetManager } from 'styled-components';
+import type { AppProps } from 'next/app';
 
 const fadeIn = keyframes`
   0% {opacity: 0}
@@ -12,33 +13,36 @@ const fadeOut = keyframes`
   100% {opacity: 0}
 `;
 
-const StyledWrapper = styled.div<{ leavingScreen: boolean }>`
-  animation-name: ${({ leavingScreen }) => (leavingScreen ? fadeOut : fadeIn)};
+const StyledWrapper = styled.div<{ $leavingScreen: boolean }>`
+  animation-name: ${({ $leavingScreen }) => ($leavingScreen ? fadeOut : fadeIn)};
   animation-duration: 0.5s;
 `;
 
 export default function App({
   Component,
   pageProps: { session, ...pageProps },
-}) {
+}: AppProps) {
   const [leavingScreen, setLeavingScreen] = useState(false);
   const [counter, setCounter] = useState(0);
 
   useEffect(() => {
     if (counter == 0) {
       setLeavingScreen(true);
-      setTimeout(() => {
+      const timeout = setTimeout(() => {
         setLeavingScreen(false);
         setCounter(1);
       }, 500);
+      return () => clearTimeout(timeout);
     }
   }, [pageProps]);
 
   return (
-    <SessionProvider session={session}>
-      <StyledWrapper leavingScreen={leavingScreen}>
-        <Component {...pageProps} />
-      </StyledWrapper>
-    </SessionProvider>
+    <StyleSheetManager enableVendorPrefixes>
+      <SessionProvider session={session}>
+        <StyledWrapper $leavingScreen={leavingScreen}>
+          <Component {...pageProps} />
+        </StyledWrapper>
+      </SessionProvider>
+    </StyleSheetManager>
   );
 }
