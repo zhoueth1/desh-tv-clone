@@ -5,7 +5,7 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 
 const origin = process.env.TEST_BASE_URL || 'http://localhost:3000';
-const imageDirectory = process.env.NETLIFY
+const imageDirectory = (process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME)
   ? path.join(tmpdir(), 'desh-tv-images')
   : path.join(process.cwd(), 'public/images');
 

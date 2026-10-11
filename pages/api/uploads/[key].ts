@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { storedImage } from '../../../src/keystone/storage';
+import { keystoneContext } from '../../../src/keystone/context';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -8,7 +9,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const key = req.query.key;
   if (typeof key !== 'string') return res.status(400).json({ error: 'An image key is required.' });
   try {
-    const { bytes, contentType } = await storedImage(key);
+    const { bytes, contentType } = await storedImage(key, keystoneContext);
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Length', bytes.length);
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');

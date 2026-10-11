@@ -33,11 +33,11 @@ export default config({
   ui: { basePath: '/admin' },
   lists,
   server: {
-    extendExpressApp: app => {
+    extendExpressApp: (app, context) => {
       app.use('/images', async (req, res, next) => {
         if (req.method !== 'GET' && req.method !== 'HEAD') return next();
         try {
-          const { bytes, contentType } = await storedImage(decodeURIComponent(req.path.slice(1)));
+          const { bytes, contentType } = await storedImage(decodeURIComponent(req.path.slice(1)), context);
           res.setHeader('Content-Type', contentType);
           res.setHeader('Content-Length', bytes.length);
           res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');

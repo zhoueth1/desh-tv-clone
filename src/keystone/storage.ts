@@ -1,11 +1,11 @@
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import type { BaseKeystoneTypeInfo, StorageStrategy } from '@keystone-6/core/types';
+import type { BaseKeystoneTypeInfo, KeystoneContext, StorageStrategy } from '@keystone-6/core/types';
 
 // Netlify functions have a read-only bundle. Uploaded bytes are also saved in
 // Article.image_data, so temporary files are needed only while ingesting uploads.
-const imageDirectory = process.env.NETLIFY
+const imageDirectory = (process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME)
   ? path.join(tmpdir(), 'desh-tv-images')
   : path.resolve(process.cwd(), 'public/images');
 
@@ -46,7 +46,7 @@ export async function resolveImageData({ resolvedData, inputData, item }: any) {
   return `data:image/${mime};base64,${bytes.toString('base64')}`;
 }
 
-export async function storedImage(key: string) {
+export async function storedImage(key: string, context?: Pick<KeystoneContext, 'prisma'>) {
   const filePath = imagePath(key);
   let bytes: Buffer;
   try {
@@ -54,9 +54,8 @@ export async function storedImage(key: string) {
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
     // Serve the persisted copy across cold starts and redeploys.
-    const { prisma } = await import('./context');
     const separator = key.lastIndexOf('.');
-    const article = await prisma.article.findFirst({
+    const article = await context?.prisma.article.findFirst({
       where: { image_id: key.slice(0, separator), image_extension: key.slice(separator + 1) },
       select: { image_data: true },
     });
